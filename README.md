@@ -79,3 +79,47 @@ py -3 pdf_to_json_gemini.py --max-pages 8
 
 - JSON 關鍵輸出資訊預設使用繁體中文（zh-TW）
 - `train/` 為資料集與產出資料，已設定不納入版本控制
+
+---
+
+## English
+
+This project preprocesses financial research reports (PDF): it downloads source files, extracts report text, calls Gemini LLM, and outputs structured JSON for downstream model training.
+
+### Features
+
+- Download and organize files from a Google Drive folder (`Download_Data.py`)
+- Extract text from broker research PDFs
+- Convert report content into a fixed JSON schema (`pdf_to_json_gemini.py`)
+- Built-in retry and model fallback (`gemini-2.5-flash` -> `gemini-2.0-flash`)
+
+### Quick Start
+
+Install dependencies:
+
+```bash
+py -3 -m pip install pypdf requests gdown
+```
+
+Run with default paths:
+
+```bash
+py -3 pdf_to_json_gemini.py
+```
+
+Run with custom paths:
+
+```bash
+py -3 pdf_to_json_gemini.py --pdf "path/to/report.pdf" --output "path/to/output.json"
+```
+
+Test only first N pages to save quota:
+
+```bash
+py -3 pdf_to_json_gemini.py --max-pages 8
+```
+
+### Notes
+
+- Key output information is expected in Traditional Chinese (zh-TW)
+- `train/` is excluded from version control
