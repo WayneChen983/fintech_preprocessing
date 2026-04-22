@@ -13,9 +13,10 @@ from pypdf import PdfReader
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 MODEL_FALLBACKS = ["gemini-2.5-flash", "gemini-2.0-flash"]
-DEFAULT_API_KEY = "AIzaSyAxULZlWSxzrGyIF2SmrklEaT5wtqhEWQA"
+DEFAULT_API_KEY = "AIzaSyA3T5jWe031r9pla-KVxgVliXP0Mro33X4"
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_PDF_PATH = BASE_DIR / "train" / "KGI" / "KGI1" / "6274_2025_11_17_C_TW.pdf"
+DEFAULT_INPUT_DIR = BASE_DIR / "train" / "Eng"
 
 
 def extract_pdf_text(pdf_path: Path, max_pages: int | None = None) -> str:
@@ -48,6 +49,8 @@ Rules:
    - cheap_or_expensive: "偏便宜" / "合理" / "偏昂貴"
    - investment rating text should use Traditional Chinese style terms (e.g., "買進", "增加持股", "中立", "減碼").
 10) extraction_quality.notes MUST be written in Traditional Chinese (zh-TW).
+11) Do NOT add excessive subjective opinions. Only provide concise judgment grounded in report text.
+12) Do NOT search external sources. Use only information from the provided PDF text.
 
 Required JSON schema:
 {{
@@ -113,17 +116,27 @@ Required JSON schema:
     "historical_pb_range": null,
     "cheap_or_expensive": null
   }},
-  "peer_benchmarking": [],
   "dividend_policy": {{
     "payout_ratio_pct": null,
     "dividend_yield_pct": null,
     "dividend_trend": null
+  }},
+  "report_conclusion_signal": {{
+    "label": null,
+    "score": null,
+    "reason": null
   }},
   "extraction_quality": {{
     "confidence_score_0_to_1": null,
     "notes": null
   }}
 }}
+
+For report_conclusion_signal:
+- "推薦購買" => score = 1
+- "中立" => score = 0
+- "不推薦購買" => score = -1
+- reason should be a short Traditional Chinese sentence based only on report evidence.
 
 Report text:
 \"\"\"{pdf_text}\"\"\"
@@ -208,45 +221,21 @@ def call_gemini_with_fallback(api_key: str, preferred_model: str, prompt: str) -
     raise RuntimeError(f"All candidate models failed. Last error: {last_error}") from last_error
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Extract financial report fields from a PDF using Gemini.")
-    parser.add_argument(
-        "--pdf",
-        default=str(DEFAULT_PDF_PATH),
-        help=f"Path to input PDF file (default: {DEFAULT_PDF_PATH}).",
-    )
-    parser.add_argument(
-        "--output",
-        default=None,
-        help="Path to output JSON file. Default: same folder as PDF, same filename with .json",
-    )
-    parser.add_argument(
-        "--api-key",
-        default=DEFAULT_API_KEY,
-        help="Gemini API key. Defaults to built-in key in this script.",
-    )
-    parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Gemini model name (default: {DEFAULT_MODEL}).")
-    parser.add_argument(
-        "--max-pages",
-        type=int,
-        default=None,
-        help="Only read first N pages (for quick test / quota saving).",
-    )
-    args = parser.parse_args()
-
-    pdf_path = Path(args.pdf)
-    output_path = Path(args.output) if args.output else pdf_path.with_suffix(".json")
-    if not pdf_path.exists():
-        raise FileNotFoundError(f"PDF not found: {pdf_path}")
-
-    pdf_text = extract_pdf_text(pdf_path, max_pages=args.max_pages)
+def process_single_pdf(
+    pdf_path: Path,
+    output_path: Path,
+    api_key: str,
+    model: str,
+    max_pages: int | None,
+) -> None:
+    pdf_text = extract_pdf_text(pdf_path, max_pages=max_pages)
     if not pdf_text:
         raise RuntimeError("No extractable text found in PDF.")
 
     prompt = build_prompt(pdf_text)
     used_model, extracted = call_gemini_with_fallback(
-        api_key=args.api_key,
-        preferred_model=args.model,
+        api_key=api_key,
+        preferred_model=model,
         prompt=prompt,
     )
 
@@ -264,6 +253,85 @@ def main() -> None:
         json.dump(final_payload, f, ensure_ascii=False, indent=2)
 
     print(f"Done. JSON written to: {output_path}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Extract financial report fields from PDFs using Gemini.")
+    parser.add_argument(
+        "--pdf",
+        default=None,
+        help="Path to a single input PDF file.",
+    )
+    parser.add_argument(
+        "--input-dir",
+        default=str(DEFAULT_INPUT_DIR),
+        help=f"Directory containing PDFs for batch mode (default: {DEFAULT_INPUT_DIR}).",
+    )
+    parser.add_argument(
+        "--output",
+        default=None,
+        help="Output JSON path for single PDF mode only. Default: same folder as PDF, same filename with .json",
+    )
+    parser.add_argument(
+        "--api-key",
+        default=DEFAULT_API_KEY,
+        help="Gemini API key. Defaults to built-in key in this script.",
+    )
+    parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Gemini model name (default: {DEFAULT_MODEL}).")
+    parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=None,
+        help="Only read first N pages (for quick test / quota saving).",
+    )
+    args = parser.parse_args()
+
+    if args.pdf:
+        pdf_path = Path(args.pdf)
+        output_path = Path(args.output) if args.output else pdf_path.with_suffix(".json")
+        if not pdf_path.exists():
+            raise FileNotFoundError(f"PDF not found: {pdf_path}")
+        process_single_pdf(
+            pdf_path=pdf_path,
+            output_path=output_path,
+            api_key=args.api_key,
+            model=args.model,
+            max_pages=args.max_pages,
+        )
+        return
+
+    input_dir = Path(args.input_dir)
+    if not input_dir.exists():
+        raise FileNotFoundError(f"Input directory not found: {input_dir}")
+
+    pdf_files = sorted(input_dir.glob("*.pdf"))
+    if not pdf_files:
+        raise FileNotFoundError(f"No PDF files found in: {input_dir}")
+
+    print(f"Batch mode: found {len(pdf_files)} PDF files in {input_dir}")
+    success_count = 0
+    failed: list[tuple[str, str]] = []
+    for idx, pdf_path in enumerate(pdf_files, start=1):
+        output_path = pdf_path.with_suffix(".json")
+        print(f"[{idx}/{len(pdf_files)}] Processing: {pdf_path.name}")
+        try:
+            process_single_pdf(
+                pdf_path=pdf_path,
+                output_path=output_path,
+                api_key=args.api_key,
+                model=args.model,
+                max_pages=args.max_pages,
+            )
+            success_count += 1
+        except Exception as e:  # noqa: BLE001
+            failed.append((pdf_path.name, str(e)))
+            print(f"Failed: {pdf_path.name} -> {e}")
+
+    print(f"Batch completed. success={success_count}, failed={len(failed)}")
+    if failed:
+        print("Failed files:")
+        for name, reason in failed:
+            print(f"- {name}: {reason}")
 
 
 if __name__ == "__main__":
