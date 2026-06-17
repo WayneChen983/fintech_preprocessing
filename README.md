@@ -1,125 +1,69 @@
 # Fintech Preprocessing
 
-此專案用於金融研究報告（PDF）前處理：下載資料、抽取文字、呼叫 Gemini LLM，並輸出結構化 JSON，供後續模型訓練使用。
+此專案用於金融研究報告前處理，重點放在只保留程式碼版本控制，不上傳大型資料檔。
 
 ## 功能
 
-- 下載 Google Drive 資料夾內容並整理輸出（`Download_Data.py`）
-- 讀取券商 PDF 報告並抽取文字
-- 呼叫 Gemini API，輸出固定欄位 JSON（`pdf_to_json_gemini.py`）
-- 內建重試與模型 fallback（`gemini-2.5-flash` -> `gemini-2.0-flash`）
+- PDF 轉 TXT（排除表格內容）
+- 使用 Gemini 進一步清理文字（移除表格殘留、免責聲明等）
+- 將 `MonthlyRet_Project.csv` 的 `Flag_1m` 回填到 JSON
+- 將 JSON 匯出成單一 CSV（完整版與乾淨版）
 
-## 專案結構
+## 主要腳本
 
-- `Download_Data.py`：下載/解壓資料腳本
-- `pdf_to_json_gemini.py`：PDF -> JSON 結構化腳本
-- `train/`：原始與處理後資料（本機資料夾，不上傳）
+- `pdf_to_txt_excluding_tables.py`
+- `clean_txt_with_gemini.py`
+- `add_flag_1m_to_json.py`
+- `json_folder_to_single_csv.py`
+- `json_with_flag_1m_clean_export.py`
 
 ## 環境需求
 
 - Python 3.10+
-- 套件：`pypdf`、`requests`、`gdown`
+- 套件：`pdfplumber`、`requests`
 
-安裝方式：
-
-```bash
-py -3 -m pip install pypdf requests gdown
-```
-
-## 使用方式
-
-### 1) 下載資料（可選）
+安裝：
 
 ```bash
-py -3 Download_Data.py --output-dir "c:\Users\bl515-pub\Downloads\Fintech_preprossing\train"
+pip install pdfplumber requests
 ```
 
-### 2) PDF 轉 JSON（預設路徑可直接執行）
+## 快速使用
+
+### 1) PDF 轉 TXT（排除表格）
 
 ```bash
-py -3 pdf_to_json_gemini.py
+python pdf_to_txt_excluding_tables.py --input-root . --output-root txt_without_tables
 ```
 
-或指定檔案：
+### 2) Gemini 清理 TXT
 
 ```bash
-py -3 pdf_to_json_gemini.py --pdf "你的pdf路徑" --output "你的json路徑"
+python clean_txt_with_gemini.py ^
+  --input-root txt_without_tables ^
+  --output-root txt_cleaned_gemini ^
+  --api-key YOUR_GEMINI_API_KEY ^
+  --model gemini-2.5-flash ^
+  --workers 4
 ```
 
-測試前幾頁（節省配額）：
+### 3) JSON 新增 `flag_1m`
 
 ```bash
-py -3 pdf_to_json_gemini.py --max-pages 8
+python add_flag_1m_to_json.py ^
+  --input-root . ^
+  --csv-path MonthlyRet_Project.csv ^
+  --output-root json_with_flag_1m
 ```
 
-## 輸出欄位
-
-腳本會輸出以下核心欄位：
-
-- `report_info`
-- `stock_identity`
-- `investment_rating`
-- `valuation_metrics`
-- `bullish_arguments`
-- `bearish_risks`
-- `industry_outlook`
-- `management_guidance`
-- `financial_estimates`
-- `eps_growth`
-- `quarterly_performance_tracker`
-- `product_mix_changes`
-- `capacity_utilization`
-- `inventory_level`
-- `valuation_multiples`
-- `peer_benchmarking`
-- `dividend_policy`
-- `extraction_quality`
-
-## 注意事項
-
-- JSON 關鍵輸出資訊預設使用繁體中文（zh-TW）
-- `train/` 為資料集與產出資料，已設定不納入版本控制
-
----
-
-## English
-
-This project preprocesses financial research reports (PDF): it downloads source files, extracts report text, calls Gemini LLM, and outputs structured JSON for downstream model training.
-
-### Features
-
-- Download and organize files from a Google Drive folder (`Download_Data.py`)
-- Extract text from broker research PDFs
-- Convert report content into a fixed JSON schema (`pdf_to_json_gemini.py`)
-- Built-in retry and model fallback (`gemini-2.5-flash` -> `gemini-2.0-flash`)
-
-### Quick Start
-
-Install dependencies:
+### 4) 匯出單一 CSV（乾淨版）
 
 ```bash
-py -3 -m pip install pypdf requests gdown
+python json_with_flag_1m_clean_export.py ^
+  --input-root json_with_flag_1m ^
+  --output-csv json_with_flag_1m_clean.csv
 ```
 
-Run with default paths:
+## 版本控制注意事項
 
-```bash
-py -3 pdf_to_json_gemini.py
-```
-
-Run with custom paths:
-
-```bash
-py -3 pdf_to_json_gemini.py --pdf "path/to/report.pdf" --output "path/to/output.json"
-```
-
-Test only first N pages to save quota:
-
-```bash
-py -3 pdf_to_json_gemini.py --max-pages 8
-```
-
-### Notes
-
-- Key output information is expected in Traditional Chinese (zh-TW)
-- `train/` is excluded from version control
+`.gitignore` 已排除 PDF/JSON/TXT/CSV/ZIP 與資料資料夾，只會追蹤程式碼與必要文件。

@@ -1,3 +1,85 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Data files (do not upload)
+*.pdf
+*.PDF
+*.txt
+*.json
+*.csv
+*.zip
+*.log
+
+# Data folders
+train/
+Eng/
+ESUN/
+FB/
+FT/
+IBFS/
+KGI/
+Mega/
+Sino/
+Uni/
+YT/
+
+# Generated outputs
+txt_without_tables/
+txt_cleaned_gemini/
+json_with_flag_1m/
+<<<<<<< HEAD
 train/
 __pycache__/
 *.pyc
+=======
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Data files (do not upload)
+*.pdf
+*.PDF
+*.txt
+*.json
+*.csv
+*.zip
+
+# Data folders in this workspace
+Eng/
+ESUN/
+FB/
+FT/
+IBFS/
+KGI/
+Mega/
+Sino/
+Uni/
+YT/
+
+# Generated outputs
+txt_without_tables/
+txt_cleaned_gemini/
+json_with_flag_1m/
+*.log
+>>>>>>> 2b33b2a (Add preprocessing automation scripts and project docs.)
